@@ -10,8 +10,30 @@ addpath([rep filesep 'SnakeKass' filesep 'PS-MATRIX']);
 addpath([rep filesep 'SnakeKass' filesep 'PS-SNAKES GVF COMMON']);
 
 %% 
+clear all
+close all
+clc
 
-im = im2double(imread("IMAGES/01-CABONS OD/CABONS_040.png"));
+% im = im2double(imread("IMAGES/01-CABONS OD/CABONS_020.png"));  %%PB
+% im = im2double(imread("IMAGES/01-CABONS OD/CABONS_021.png"));
+ im = im2double(imread("IMAGES/01-CABONS OD/CABONS_040.png"));
+
+
+% im = im2double(imread("IMAGES/02-DEA_OD/DEA_OD020.png")); 
+%  im = im2double(imread("IMAGES/02-DEA_OD/DEA_OD021.png"));  %PB pour sigma petit
+%  im = im2double(imread("IMAGES/02-DEA_OD/DEA_OD040.png"));
+%  im = im2double(imread("IMAGES/02-DEA_OD/DEA_OD016.png"));
+
+% im = im2double(imread("IMAGES/04_BIM_OD/BIM_OD021.png"));
+% im = im2double(imread("IMAGES/04_BIM_OD/BIM_OD023.png"));
+% im = im2double(imread("IMAGES/04_BIM_OD/BIM_OD016.png"));
+% im = im(:, 1:end-14, :);
+
+% im = im2double(imread("IMAGES/08_TRK_OD/TRK_OD020.png")); 
+% im = im2double(imread("IMAGES/08_TRK_OD/TRK_OD021.png"));    %%PB
+% im = im2double(imread("IMAGES/08_TRK_OD/TRK_OD040.png"));
+%  im = im2double(imread("IMAGES/08_TRK_OD/TRK_OD016.png"));
+
 [H, W] = size(im);
 
 plane_H = H-104;
@@ -24,55 +46,98 @@ imp_im = im(1:plane_H, :, :);
 
 radial_im = imp_im(:, plane_H+7:end, :);
 radial_im = rgb2gray(radial_im);
+%  S = graythresh(radial_im)
+%  radial_im(radial_im < S) = 0;
 %radial_im = histeq(radial_im);
+
+% figure;
+% imshow(radial_im);
+
 [H, W] = size(radial_im);
 
 
 %figure;
 %imshow(radial_im);
+radial_im = wiener2(radial_im,[20 20]);
+% figure;
+% imshow(radial_im);
 
-SE = strel('disk', 10);
-eroded_im = imopen(radial_im, SE);
-%eroded_im = radial_im;
+eroded_im = radial_im;
 
-figure;
-  eroded_im(eroded_im > graythresh(eroded_im)) = 1;
-  eroded_im(eroded_im < graythresh(eroded_im)) = 0;
+%SE = strel('disk', 4);
+%eroded_im = imerode(eroded_im, SE);
 
+SE = strel('disk', 2);
+eroded_im = imopen(eroded_im, SE);
+
+% figure;
+% imshow(eroded_im);
+
+SE = strel('disk', 15);
 eroded_im = imclose(eroded_im, SE);
 
+
+figure;
 imshow(eroded_im);
 
+%figure;plot(imhist(eroded_im));
+
+
+seg_im = eroded_im;
+
+%eroded_im = radial_im;
+
+   seg_im(seg_im > graythresh(seg_im)) = 1;
+   seg_im(seg_im < graythresh(seg_im)) = 0;
+seg_im = imfill(seg_im,'holes');
+
+% figure;
+% imshow(eroded_im);
+
+
+
+figure;
+imshow(seg_im);
+
 
 
 
 %%
+imt = seg_im;
+
+cumulative_horizontal_profil = sum(imt, 1);
+bound_left = find(cumulative_horizontal_profil, 1, "first");
+bound_right = W - find(flip(cumulative_horizontal_profil), 1, "first");
 
 figure;
-plot(imhist(radial_im));
-uu = radial_im; % > graythresh(radial_im);
-
-SE = strel('disk', 5);
-uue = imopen(uu, SE);
-uue = imclose(uue, SE);
-
-uu = radial_im; %& > graythresh(radial_im);
-
-imshow(uue);
-
+plot(cumulative_horizontal_profil);
 
 %%
-imt = radial_im;
-central_profil = imt(:, W/2);
-Y = diff(central_profil);
 
-[l, pks_pos] = findpeaks(central_profil, "MinPeakProminence", 0.5) % 0.4
+imt = seg_im;
+left_profil = mean(imt(:, 1:20), 2);
+right_profil = mean(imt(:, bound_right-20+1:bound_right), 2);
+central_profil = mean(imt(:, W/2-20:W/2+20), 2);
+
+w4 = round(bound_right/4);
+first_quartile_profil = mean(imt(:, w4-20:w4+20), 2);
+third_quartile_profil = mean(imt(:, 3*w4-20:3*w4+20), 2);
 
 figure;
-subplot(1, 2, 1);
+subplot(1, 3, 1);
+plot(left_profil);
+subplot(1, 3, 2);
 plot(central_profil);
-subplot(1, 2, 2);
-plot(Y);
+subplot(1, 3, 3);
+plot(right_profil);
+
+yleft = find(left_profil, 1, "first"); %The first-non zero value
+ycenter = find(central_profil, 1, "first");
+%yright = yleft; 1*H/2;
+yright = find(right_profil, 1, "first");
+
+yfirst_quartile = find(first_quartile_profil, 1, "first");
+ythird_quartile = find(third_quartile_profil, 1, "first");
 
 
 
@@ -80,10 +145,10 @@ plot(Y);
 
 mode            = 1;            % 1 for edge, 2 for image (mode crêtes)(lignes), 3 for negative of image
 mu              = 0.1;
-nbGVFiter       = 5;
-sigma           = 5;            % Standard deviation of the gaussian kernel applied to the processed image
+nbGVFiter       = 15; %5
+sigma           = 11;            % Standard deviation of the gaussian kernel applied to the processed image
 
-[px,py,imEdgeMap] = GVFCompute(eroded_im, mode,mu, nbGVFiter,sigma);
+[px,py,imEdgeMap] = GVFCompute(seg_im, mode,mu, nbGVFiter,sigma);
 
 
 % Deplay GVF field
@@ -96,9 +161,9 @@ quiver(Y,X,px(1:step:H,1:step:W),py(1:step:H,1:step:W));
 %%  Apply snake
 
 % define parameters 
-alpha       = 15; 
-beta        = 55;
-gamma       = 1;%Vitesse d'évolution
+alpha       = 10; 
+beta        = 15;
+gamma       = 2;%Vitesse d'évolution
 kappa       = 3;% Pender qlqchose
 nbiter      = 50;
 stepIter    = 5;
@@ -107,76 +172,32 @@ maxChange   = 0.3;
 fid = figure('Name','SNAKES'); 
 
 
-lineX = 1:W;
-lineY = ones(1,W)*160;
+% Chaque qlq pixel
+%lineY = ones(1,(W-40)/18)*(pks_pos(1)-40);
+step = 18;
+
+lineX = 1:step:bound_right;
+lineY = [
+    linspace(yleft, yfirst_quartile, (bound_right+2*step)/step /4), ...
+    linspace(yfirst_quartile, ycenter, (bound_right+2*step)/step /4), ...
+    linspace(ycenter, ythird_quartile, (bound_right+2*step)/step /4), ...
+    linspace(ythird_quartile, yright, 2+(bound_right+2*step)/step /4 )
+];
+
+%lineX = lineX(bound_left/18:1:bound_right/18);
+%lineY = lineY(bound_left/18:1:bound_right/18);
+
 
 %[Y,X] = GVFSnakeClose(im,px,py,Y,X, alpha,beta,gamma,kappa,nbiter,stepIter,maxChange, fid);
 [Y,X] = GVFSnake(radial_im,px,py,lineX,lineY, alpha,beta,gamma,kappa,nbiter,stepIter,maxChange, fid);
 
-v = [X';Y'];
+slice = [X';Y'];
 
-    % plot(axons{a}(2,:),axons{a}(1,:),'r');
-
-
-% plane = imp_im(:, 1:plane_H, :);
-% 
-% arrow_plane = plane(:,:,2) == 255 & plane(:,:,1) == 0 & plane(:,:,3) == 0 ;
-% figure;
-% imshow(arrow_plane);
-% figure;
-% imshow(plane);
+% 48 * slices = [
+%     [Y0 Y1 Y2 ... Y_n],
+%     [X0 X1 X2 ... X_n]
+% ]
+% n <= Width
+% Width  = 1534;
 
 
-
-% 
-% function [angle] = computeAnglee(arrow_plane)
-%     [H, W] = size(arrow_plane);
-%     H2 = H/2;
-%     W2 = W/2;
-%     
-%     
-%     top_left = sum(arrow_plane(1:H2, 1:W2), "all")
-%     top_right = sum(arrow_plane(1:H2, W2:end), "all")
-% 
-% 
-%     bottom_left = sum(arrow_plane(H2:end, 1:W2), "all")
-%     bottom_right = sum(arrow_plane(H2:end, W2:end), "all")
-% 
-%     grad_x = (top_right + bottom_right) - (top_left + bottom_left)
-%     grad_y = (top_right + top_left) - (bottom_right + bottom_left)
-%     
-%     angle = atan(grad_y/grad_x);
-%     angle = rad2deg(angle);
-% end
-% function [angle] = computeAngleee(arrow_plane)
-%     
-%     [m,u,Gx,Gy] = edge(arrow_plane, "prewitt"); 
-%     grad_x = mean(Gx, "all")
-%     grad_y = mean(Gy, "all")
-%     imshow(Gx);
-%     
-%     angle = atan(grad_y/grad_x);
-%     angle = rad2deg(angle);
-% end
-% 
-% function [angle] = computeAngle(arrow_plane)
-%     [H, W] = size(arrow_plane);
-%     H2 = H/2;
-%     W2 = W/2;
-%     
-%     figure;
-%     find(sum(arrow_plane) > 0, 1, 'last');
-%     
-%     top_left = sum(arrow_plane(1:H2, 1:W2), "all")
-%     top_right = sum(arrow_plane(1:H2, W2:end), "all")
-% 
-% 
-%     bottom_left = sum(arrow_plane(H2:end, 1:W2), "all")
-%     bottom_right = sum(arrow_plane(H2:end, W2:end), "all")
-% 
-%     grad_x = (top_right + bottom_right) - (top_left + bottom_left)
-%     grad_y = (top_right + top_left) - (bottom_right + bottom_left)
-%     
-%     angle = atan(grad_y/grad_x);
-%     angle = rad2deg(angle);
-% end
