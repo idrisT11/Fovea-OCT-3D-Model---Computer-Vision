@@ -4,7 +4,7 @@
 %
 % -------------------------------------------------------------------------
 
-function IMVECT = HRC(image)
+function vecteurInitialisation = HRC(image)
 
     I = rgb2gray(image);        % Conversion en niveau de gris
 
