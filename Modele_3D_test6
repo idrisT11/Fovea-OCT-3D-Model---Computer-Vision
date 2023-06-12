@@ -1,0 +1,52 @@
+clc;
+clear all;
+close all;
+
+slice = load('slide.mat').v;
+
+% Création des vecteurs x et y avec 4 courbes à 90 degrés de rotation
+x1 = slice(2,:);
+y1 = slice(1,:);
+
+x2 = fliplr(y1);
+y2 = fliplr(-x1);
+
+x3 = fliplr(-x1);
+y3 = fliplr(-y1);
+
+x4 = fliplr(-y1);
+y4 = fliplr(x1);
+
+% Concaténation des vecteurs x et y
+x = [x1 x2 x3 x4];
+y = [y1 y2 y3 y4];
+
+% Paramètres de résolution
+resolution = 1; % Réduisez la résolution si nécessaire
+
+% Réduire la résolution
+x = unique(round(x, resolution)); % Arrondir les valeurs et supprimer les doublons
+y = unique(round(y, resolution));
+
+% Création de la grille de points
+[X, Y] = meshgrid(x, y);
+
+% Calcul des valeurs de z en fonction de vos besoins
+Z = sqrt(X.^2 + Y.^2);
+
+% Afficher la surface 3D
+surf(X, Y, Z, Z, 'EdgeColor', 'none');
+hold on;
+
+% Ajouter les barres isohypses
+contour3(X, Y, Z, 10, 'k');
+
+% Paramètres d'apparence
+colormap('jet');
+colorbar;
+xlabel('X');
+ylabel('Y');
+zlabel('Z');
+title('Surface 3D avec barres isohypses');
+
+hold off;
