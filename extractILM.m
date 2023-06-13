@@ -1,6 +1,6 @@
 
 
-function [slice] = extractILM(img, afficheMode)
+function [slice] = extractILM(img, afficheMode, initialSnake)
     [H, W] = size(img);
     
     [segmentedImg] = preprocessILM(img);
@@ -14,9 +14,10 @@ function [slice] = extractILM(img, afficheMode)
 
     % Define the anchor points of the active contours;
     %----------------------------------------------------
-    [yleft, yfirst_quartile, ...
-     ycenter, ythird_quartile, yright] = defineAnchorPoints(segmentedImg, bound_left, bound_right);
-    
+    if (isempty(initialSnake))
+        [yleft, yfirst_quartile, ...
+        ycenter, ythird_quartile, yright] = defineAnchorPoints(segmentedImg, bound_left, bound_right);
+    end
 
     % Color the pixel belows white <-----------------------------
     %----------------------------------------------------
@@ -28,9 +29,9 @@ function [slice] = extractILM(img, afficheMode)
     mode            = 1;            
     mu              = 0.1;
     nbGVFiter       = 5;
-    sigma           = 3;            
+    sigma           = 7.5;%3;            
     
-    [px,py, l] = GVFCompute(segmentedImg, mode,mu, nbGVFiter,sigma);
+    [px, py, l] = GVFCompute(segmentedImg, mode,mu, nbGVFiter,sigma);
     
 
     % Apply Snakes
@@ -39,13 +40,18 @@ function [slice] = extractILM(img, afficheMode)
     offset = ceil(bound_right/step) - (floor(bound_right/step/4)*4);
     
     % Initialise the initial contour
-    lineX = 1:step:bound_right;
-    lineY = [
-        linspace(yleft, yfirst_quartile, (bound_right/step) /4), ...
-        linspace(yfirst_quartile, ycenter, (bound_right/step) /4), ...
-        linspace(ycenter, ythird_quartile, (bound_right/step) /4), ...
-        linspace(ythird_quartile, yright, offset + (bound_right/step) /4 )
-    ];
+    if (isempty(initialSnake))
+        lineX = 1:step:bound_right;
+        lineY = [
+            linspace(yleft, yfirst_quartile, (bound_right/step) /4), ...
+            linspace(yfirst_quartile, ycenter, (bound_right/step) /4), ...
+            linspace(ycenter, ythird_quartile, (bound_right/step) /4), ...
+            linspace(ythird_quartile, yright, offset + (bound_right/step) /4 )
+        ];
+    else
+        lineY = initialSnake(1, :);
+        lineX = initialSnake(2, :);
+    end
     
     slice = applyActiveContours(img, px, py, lineX, lineY, afficheMode);
 end
@@ -58,22 +64,29 @@ function [segmentedImg] = preprocessILM(img)
     
     % Smoothing the image
     %------------------------------
-    SE_opening = strel('disk', 2);
+    SE_opening = strel('disk', 9);
     SE_closing = strel('disk', 19); %15
 
     morphedImg = imopen(filteredImg, SE_opening);
     morphedImg = imclose(morphedImg, SE_closing);
+
+%     figure;
+%     imshow(morphedImg);
     
     % Applying an Otsu threshold
     %------------------------------
     thresh = graythresh(morphedImg);
+    segmentedImg = hysteresisThresholding(morphedImg, thresh-0.07, thresh);
     %segmentedImg(seg_im > graythresh(seg_im)) = 1;
     %segmentedImg(seg_im < graythresh(seg_im)) = 0;
-    segmentedImg = imbinarize(morphedImg, thresh);
+    %segmentedImg = imbinarize(morphedImg, thresh);
 
     % Fill any hole that can be found on the image
     %------------------------------
     segmentedImg = imfill(segmentedImg,'holes');
+    
+%         figure;
+%     imshow(segmentedImg);
 end
 
 function [slice] = applyActiveContours(img, px, py, lineX, lineY, afficheMode)
@@ -132,5 +145,27 @@ function [segmentedImg] = colorPixelsBelowWhite(img)
         segmentedImg(row+1:end, col) = 255;
     end
 end
+
+function outputImage = hysteresisThresholding(normalizedImage, lowThreshold, highThreshold)
+        
+    % Apply the high threshold to create a binary image
+    binaryImage = normalizedImage >= highThreshold;
+    
+    lowThresholdMask = normalizedImage >= lowThreshold;
+    
+    connectedComponents = bwconncomp(lowThresholdMask);
+    
+    outputImage = zeros(size(normalizedImage));
+    for i = 1:connectedComponents.NumObjects
+        componentIndices = connectedComponents.PixelIdxList{i};
+        if any(binaryImage(componentIndices))
+            outputImage(componentIndices) = 1;
+        end
+    end
+end
+
+
+
+
 
 
